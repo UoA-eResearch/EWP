@@ -1,0 +1,266 @@
+<html>
+
+<head>
+    <title>Ethnic women in NZ politics</title>
+
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="shortcut icon" type="image/x-icon" href="docs/images/favicon.ico" />
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+        integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+        crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+        integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+        crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet-providers@1.3.0/leaflet-providers.js"></script>
+    <script src='//api.tiles.mapbox.com/mapbox.js/plugins/leaflet-omnivore/v0.3.1/leaflet-omnivore.min.js'></script>
+    <script src="https://unpkg.com/@mapbox/leaflet-pip@latest/leaflet-pip.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/spin.js/2.3.2/spin.min.js"></script>
+    <script src="https://unpkg.com/leaflet-spin@1.1.0/leaflet.spin.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"
+        integrity="sha512-894YE6QWD5I59HgZOGReFYm4dnWc1Qt5NtvYSaNcOP+u1T9qYdvdihz0PPSiiqn/+/3e7Jo4EaG7TubfWGUrMQ=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <style>
+        html,
+        body,
+        #map {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+        }
+
+        .legend {
+            color: white;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.8);
+            border-radius: 5px;
+        }
+
+        #title {
+            position: absolute;
+            top: 30;
+            left: 0;
+            right: 0;
+            margin: auto;
+            z-index: 1000;
+            width: 50%;
+            text-align: center;
+            color: white;
+            border-radius: 5px;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.8);
+            font-family: Arial, Helvetica, sans-serif;
+            text-shadow: 2px 2px #000000;
+            font-weight: normal;
+            font-size: 1rem;
+        }
+    </style>
+</head>
+
+<body>
+    <h1 id="title">Ethnic women in NZ politics</h1>
+    <div id="map"></div>
+    <script>
+        // Leaflet map
+        var map = L.map('map').setView([-41.235726, 172.5118422], 6);
+        var positron = L.tileLayer.provider('CartoDB.Positron').addTo(map);
+        var bounds = map.getBounds();
+        bounds._northEast.lat += 10;
+        bounds._northEast.lng += 10;
+        bounds._southWest.lat -= 10;
+        bounds._southWest.lng -= 10;
+        map.setMaxBounds(bounds);
+        // Load General Electoral District TopoJSON
+        var layerLookup = {}
+        var customLayer = L.geoJson(null, {
+            style: {
+                color: "gray",
+                weight: .5,
+                fillOpacity: .1,
+            },
+            onEachFeature: function (feature, layer) {
+                layer.bindTooltip(feature.properties.GED2020_V1_00_NAME, { sticky: true })
+                layerLookup[feature.properties.GED2020_V1_00_NAME] = L.geoJSON(feature)
+            }
+        })
+        var GED = omnivore.topojson('GED2020_clip.topojson', null, customLayer).addTo(map);
+        map.spin(true);
+
+        randomPointInPoly = function (polygon) {
+            var bounds = polygon.getBounds();
+            var x_min = bounds.getEast();
+            var x_max = bounds.getWest();
+            var y_min = bounds.getSouth();
+            var y_max = bounds.getNorth();
+
+            var lat = y_min + (Math.random() * (y_max - y_min));
+            var lng = x_min + (Math.random() * (x_max - x_min));
+
+            leafletPip.bassackwards = true;
+
+            var point = [lat, lng];
+
+            var inside = leafletPip.pointInLayer(point, polygon, true).length;
+
+            if (inside) {
+                return point
+            } else {
+                return randomPointInPoly(polygon)
+            }
+        }
+
+        function parseSheet() {
+            map.spin(false);
+            // Read cached data
+            var rows = JSON.parse(localStorage["sheet"]);
+            var headers = rows[16]
+            for (var i in headers) {
+                if (headers[i] == "") {
+                    headers[i] = rows[17][i]
+                }
+                if (headers[i] == "") {
+                    headers[i] = rows[18][i]
+                }
+            }
+            var keys = ["Name", "Contesting Electorate", "PARTY", "Ethnicity ", "Notes", "Occupation before politics", "Occupation after politics", "Affiliations", "Further Info"]
+            var people = []
+            for (var i = 19; i < rows.length; i++) {
+                var person = {}
+                for (var key of keys) {
+                    var value = rows[i][headers.indexOf(key)]
+                    if (value) {
+                        if (key == "PARTY") {
+                            person["Party"] = value.trim()
+                        } else {
+                            person[key.trim()] = value.trim()
+                        }
+                    }
+                }
+                if (person["Name"] && person["Contesting Electorate"] && person["Contesting Electorate"] != "-") {
+                    people.push(person)
+                }
+            }
+            console.log(people)
+            for (var person of people) {
+                var electorate = person["Contesting Electorate"]
+                var match = electorate.match(/: ([^;,]+)[;,]/)
+                if (match) {
+                    electorate = match[1]
+                }
+                if (electorate == "Wellington") {
+                    electorate = "Wellington Central"
+                } else if (electorate == "Christchurch") {
+                    electorate = "Christchurch Central"
+                } else if (electorate == "Hunua" || electorate == "Clevedon") {
+                    electorate = "Papakura"
+                } else if (electorate == "Mount Roskill") {
+                    electorate = "Mt Roskill"
+                } else if (electorate == "Mount Albert") {
+                    electorate = "Mt Albert"
+                } else if (electorate == "Mangere") {
+                    electorate = "Māngere"
+                } else if (electorate == "Manukau East") {
+                    electorate = "Takanini"
+                } else if (electorate == "Rimutaka") {
+                    electorate = "Remutaka"
+                }
+                if (layerLookup[electorate]) {
+                    var point = randomPointInPoly(layerLookup[electorate]);
+                    var desc = "";
+                    for (var k of keys) {
+                        if (k == "Name") {
+                            desc += `<b>${person[k]}</b><br>`
+                        } else if (person[k]) {
+                            desc += `${k}: ${person[k]}<br>`
+                        }
+                    }
+                    L.circleMarker(point).bindTooltip(person.Name).bindPopup(desc).addTo(map)
+                } else {
+                    console.warn(`${electorate} not found`)
+                }
+            }
+        }
+
+        // Google Sheets API
+        // Client ID and API key from the Developer Console
+        var CLIENT_ID = '898231813242-pgc14hkj0ohml3c63j3m2a6atv66egri.apps.googleusercontent.com';
+
+        // Array of API discovery doc URLs for APIs used by the quickstart
+        var DISCOVERY_DOCS = ["https://sheets.googleapis.com/$discovery/rest?version=v4"];
+
+        // Authorization scopes required by the API; multiple scopes can be
+        // included, separated by spaces.
+        var SCOPES = "https://www.googleapis.com/auth/spreadsheets.readonly";
+
+        /**
+         *  On load, called to load the auth2 library and API client library.
+         */
+        function handleClientLoad() {
+            // Read sheet from cache, if available
+            if (localStorage["sheet"]) {
+                parseSheet()
+            } else {
+                // Login to Google via oauth and get the sheet over the Sheets API
+                gapi.load('client:auth2', initClient);
+            }
+        }
+
+        /**
+         *  Initializes the API client library and sets up sign-in state
+         *  listeners.
+         */
+        function initClient() {
+            gapi.client.init({
+                //apiKey: API_KEY,
+                clientId: CLIENT_ID,
+                discoveryDocs: DISCOVERY_DOCS,
+                scope: SCOPES,
+                ux_mode: 'redirect',
+            }).then(function () {
+                // Listen for sign-in state changes.
+                gapi.auth2.getAuthInstance().isSignedIn.listen(updateSigninStatus);
+
+                // Handle the initial sign-in state.
+                updateSigninStatus(gapi.auth2.getAuthInstance().isSignedIn.get());
+            }, function (error) {
+                console.error(error);
+            });
+        }
+
+        /**
+         *  Called when the signed in status changes, to update the UI
+         *  appropriately. After a sign-in, the API is called.
+         */
+        function updateSigninStatus(isSignedIn) {
+            if (isSignedIn) {
+                console.log("Signed in")
+                fetchSheet()
+            } else {
+                gapi.auth2.getAuthInstance().signIn();
+            }
+        }
+
+        function fetchSheet() {
+            gapi.client.sheets.spreadsheets.values.get({
+                spreadsheetId: '11inbBsKYC2Zq9dXjhlLikPIG-s-_NzD39erlUD5Proc',
+                range: "Parliament DATABASE"
+            }).then(function (response) {
+                console.log(response);
+                localStorage["sheet"] = JSON.stringify(response.result.values)
+                parseSheet()
+            }, function (response) {
+                console.error(response);
+            });
+        }
+
+    </script>
+
+    <script async defer src="https://apis.google.com/js/api.js" onload="this.onload=function(){};handleClientLoad()"
+        onreadystatechange="if (this.readyState === 'complete') this.onload()"></script>
+</body>
+
+</html>
