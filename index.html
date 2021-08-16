@@ -24,6 +24,8 @@
         integrity="sha512-894YE6QWD5I59HgZOGReFYm4dnWc1Qt5NtvYSaNcOP+u1T9qYdvdihz0PPSiiqn/+/3e7Jo4EaG7TubfWGUrMQ=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://unpkg.com/linkifyjs@2.1.9/dist/linkify.js"></script>
+    <script src="https://unpkg.com/linkifyjs@2.1.9/dist/linkify-html.js"></script>
     <style>
         html,
         body,
@@ -146,7 +148,7 @@
                         if (key == "PARTY") {
                             person["Party"] = value.trim()
                         } else {
-                            person[key.trim()] = value.trim()
+                            person[key.trim()] = linkifyHtml(value.trim())
                         }
                     }
                 }
