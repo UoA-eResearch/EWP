@@ -93,7 +93,9 @@
         var GED = omnivore.topojson('GED2020_clip.topojson', null, customLayer).addTo(map).on("ready", function () {
             console.log("GED ready")
             // Read sheet from cache, if available
-            if (localStorage["sheet"]) {
+            var cache_age = new Date() - new Date(localStorage["cached_at"]);
+            console.log(`Cache age is ${cache_age / 1000}s`)
+            if (localStorage["sheet"] && cache_age < 60*60*1000) {
                 parseSheet()
             } else {
                 // Login to Google via oauth and get the sheet over the Sheets API
@@ -250,6 +252,7 @@
             }).then(function (response) {
                 console.log(response);
                 localStorage["sheet"] = JSON.stringify(response.result.values)
+                localStorage["cached_at"] = new Date()
                 parseSheet()
             }, function (response) {
                 console.error(response);
