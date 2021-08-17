@@ -42,6 +42,14 @@
             background-color: rgba(0, 0, 0, 0.8);
             border-radius: 5px;
         }
+        .legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.7;
+            border-radius: 50%;
+        }
 
         #title {
             position: absolute;
@@ -94,8 +102,9 @@
             console.log("GED ready")
             // Read sheet from cache, if available
             var cache_age = new Date() - new Date(localStorage["cached_at"]);
+            //cache_age = 1e10
             console.log(`Cache age is ${cache_age / 1000}s`)
-            if (localStorage["sheet"] && cache_age < 60*60*1000) {
+            if (localStorage["sheet"] && cache_age < 60 * 60 * 1000) {
                 parseSheet()
             } else {
                 // Login to Google via oauth and get the sheet over the Sheets API
@@ -127,40 +136,54 @@
             }
         }
 
+        // From https://en.wikipedia.org/wiki/Wikipedia:Index_of_New_Zealand_political_party_meta_attributes
+        const PARTY_COLORS = {
+            "ACT": "#FDE401",
+            "Green": "#098137",
+            "Labour": "#D82A20",
+            "Maori": "#B2001A",
+            "National": "#00529F",
+            "Other": "gray"
+        }
+        var legend = L.control({ position: 'bottomright' });
+
+        legend.onAdd = function (map) {
+
+            var div = L.DomUtil.create('div', 'info legend');
+            for (var party in PARTY_COLORS) {
+                div.innerHTML += `<i style="background:${PARTY_COLORS[party]}"></i> ${party}<br>`
+            }
+
+            return div;
+        };
+
+        legend.addTo(map);
+
         function parseSheet() {
             map.spin(false);
             // Read cached data
             var rows = JSON.parse(localStorage["sheet"]);
-            var headers = rows[16]
-            for (var i in headers) {
-                if (headers[i] == "") {
-                    headers[i] = rows[17][i]
-                }
-                if (headers[i] == "") {
-                    headers[i] = rows[18][i]
-                }
-            }
-            var keys = ["Name", "Contesting Electorate", "PARTY", "Ethnicity ", "Notes", "Occupation before politics", "Occupation after politics", "Affiliations", "Further Info"]
-            var people = []
-            for (var i = 19; i < rows.length; i++) {
+            console.log(rows)
+            var headers = rows[3]
+            console.log(headers.slice(3))
+            var people = {}
+            for (var i = 5; i < rows.length; i++) {
                 var person = {}
-                for (var key of keys) {
-                    var value = rows[i][headers.indexOf(key)]
-                    if (value) {
-                        if (key == "PARTY") {
-                            person["Party"] = value.trim()
-                        } else {
-                            person[key.trim()] = linkifyHtml(value.trim())
-                        }
+                for (var j in headers) {
+                    var key = headers[j]
+                    var value = rows[i][j]
+                    if (key && value) {
+                        person[key.trim()] = linkifyHtml(value.trim())
                     }
                 }
-                if (person["Name"] && person["Contesting Electorate"] && person["Contesting Electorate"] != "-") {
-                    people.push(person)
+                if (person.Name) {
+                    people[person.Name] = person
                 }
             }
             console.log(people)
-            for (var person of people) {
+            for (var person of Object.values(people)) {
                 var electorate = person["Contesting Electorate"]
+                if (!electorate || electorate == "-") continue
                 var match = electorate.match(/: ([^;,]+)[;,]/)
                 if (match) {
                     electorate = match[1]
@@ -185,6 +208,7 @@
                 if (layerLookup[electorate]) {
                     var point = randomPointInPoly(layerLookup[electorate]);
                     var desc = "";
+                    var keys = ["Name", "Type of Election", "Affiliation", "Ethnicity", "Local Election Run", "Incumbency", "Contesting Electorate", "Party Committee member of", "Party Spokesperson for", "Chair", "Profession ", "Organisational affiliation", "Additional Information"]
                     for (var k of keys) {
                         if (k == "Name") {
                             desc += `<b>${person[k]}</b><br>`
@@ -192,7 +216,11 @@
                             desc += `${k}: ${person[k]}<br>`
                         }
                     }
-                    L.circleMarker(point).bindTooltip(person.Name).bindPopup(desc).addTo(map)
+                    var color = "gray";
+                    if (PARTY_COLORS[person.Affiliation]) {
+                        color = PARTY_COLORS[person.Affiliation]
+                    }
+                    L.circleMarker(point, { color: color }).bindTooltip(person.Name).bindPopup(desc).addTo(map)
                 } else {
                     console.warn(`${electorate} not found`)
                 }
@@ -229,6 +257,7 @@
                 updateSigninStatus(gapi.auth2.getAuthInstance().isSignedIn.get());
             }, function (error) {
                 console.error(error);
+                alert(error.details)
             });
         }
 
@@ -248,7 +277,7 @@
         function fetchSheet() {
             gapi.client.sheets.spreadsheets.values.get({
                 spreadsheetId: '11inbBsKYC2Zq9dXjhlLikPIG-s-_NzD39erlUD5Proc',
-                range: "Parliament DATABASE"
+                range: "Full candidate database (FCD)",
             }).then(function (response) {
                 console.log(response);
                 localStorage["sheet"] = JSON.stringify(response.result.values)
