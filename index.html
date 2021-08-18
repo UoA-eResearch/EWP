@@ -88,18 +88,63 @@
         // Load General Electoral District TopoJSON
         var layerLookup = {}
         var customLayer = L.geoJson(null, {
-            style: {
-                color: "gray",
-                weight: .5,
-                fillOpacity: .1,
+            filter: function(feature) {
+                var p = feature.properties
+                if (p.GED2020_V1_00_NAME) {
+                    layerLookup[p.GED2020_V1_00_NAME] = L.geoJSON(feature)
+                } else if (p.TALB2020_V1_00_NAME) {
+                    layerLookup[p.TALB2020_V1_00_NAME] = L.geoJSON(feature)
+                } else if (p.WARD2020_V1_00_NAME) {
+                    layerLookup[p.WARD2020_V1_00_NAME.trim()] = L.geoJSON(feature)
+                } else if (p.DHB2015_Name) {
+                    p.DHB2015_Name = p.DHB2015_Name + " District Health Board"
+                    layerLookup[p.DHB2015_Name] = L.geoJSON(feature)
+                }
+                return p.GED2020_V1_00_NAME
+            },
+            style: function(feature) {
+                var p = feature.properties;
+                if (p.GED2020_V1_00_NAME) {
+                    return {
+                        color: "gray",
+                        weight: .5,
+                        fillOpacity: .01,
+                    }
+                } else if (p.TALB2020_V1_00_NAME) {
+                    return {
+                        color: "green",
+                        weight: .5,
+                        fillOpacity: .01,
+                    }
+                } else if (p.WARD2020_V1_00_NAME) {
+                    return {
+                        color: "blue",
+                        weight: .5,
+                        fillOpacity: .01,
+                    }
+                } else if (p.DHB2015_Name) {
+                    return {
+                        color: "red",
+                        weight: .5,
+                        fillOpacity: .01
+                    }
+                }
             },
             onEachFeature: function (feature, layer) {
-                layer.bindTooltip(feature.properties.GED2020_V1_00_NAME, { sticky: true })
-                layerLookup[feature.properties.GED2020_V1_00_NAME] = L.geoJSON(feature)
+                var p = feature.properties;
+                var tooltip = ""
+                if (p.GED2020_V1_00_NAME) {
+                    layer.bindTooltip(p.GED2020_V1_00_NAME + " electorate", { sticky: true })
+                } else if (p.TALB2020_V1_00_NAME) {
+                    layer.bindTooltip(p.TALB2020_V1_00_NAME, { sticky: true })
+                } else if (p.WARD2020_V1_00_NAME) {
+                    layer.bindTooltip(p.WARD2020_V1_00_NAME, { sticky: true })
+                } else if (p.DHB2015_Name) {
+                    layer.bindTooltip(p.DHB2015_Name, { sticky: true })
+                }
             }
         })
-        var GED = omnivore.topojson('GED2020_clip.topojson', null, customLayer).addTo(map).on("ready", function () {
-            console.log("GED ready")
+        var GED = omnivore.topojson('GED+TALB+DHB+WARD_clip.topojson', null, customLayer).addTo(map).on("ready", function () {
             // Read sheet from cache, if available
             var cache_age = new Date() - new Date(localStorage["cached_at"]);
             //cache_age = 1e10
@@ -163,9 +208,7 @@
             map.spin(false);
             // Read cached data
             var rows = JSON.parse(localStorage["sheet"]);
-            console.log(rows)
             var headers = rows[3]
-            console.log(headers.slice(3))
             var people = {}
             for (var i = 5; i < rows.length; i++) {
                 var person = {}
@@ -181,29 +224,57 @@
                 }
             }
             console.log(people)
+            console.log(layerLookup)
             for (var person of Object.values(people)) {
                 var electorate = person["Contesting Electorate"]
-                if (!electorate || electorate == "-") continue
-                var match = electorate.match(/: ([^;,]+)[;,]/)
-                if (match) {
-                    electorate = match[1]
-                }
-                if (electorate == "Wellington") {
-                    electorate = "Wellington Central"
-                } else if (electorate == "Christchurch") {
-                    electorate = "Christchurch Central"
-                } else if (electorate == "Hunua" || electorate == "Clevedon") {
-                    electorate = "Papakura"
-                } else if (electorate == "Mount Roskill") {
-                    electorate = "Mt Roskill"
-                } else if (electorate == "Mount Albert") {
-                    electorate = "Mt Albert"
-                } else if (electorate == "Mangere") {
-                    electorate = "Māngere"
-                } else if (electorate == "Manukau East") {
-                    electorate = "Takanini"
-                } else if (electorate == "Rimutaka") {
-                    electorate = "Remutaka"
+                if (electorate) {
+                    var match = electorate.match(/: ([^;,]+)[;,]/)
+                    if (match) {
+                        electorate = match[1]
+                    }
+                    if (electorate == "Wellington") {
+                        electorate = "Wellington Central"
+                    } else if (electorate == "Christchurch") {
+                        electorate = "Christchurch Central"
+                    } else if (electorate == "Hunua" || electorate == "Clevedon") {
+                        electorate = "Papakura"
+                    } else if (electorate == "Mount Roskill") {
+                        electorate = "Mt Roskill"
+                    } else if (electorate == "Mount Albert") {
+                        electorate = "Mt Albert"
+                    } else if (electorate == "Mangere") {
+                        electorate = "Māngere"
+                    } else if (electorate == "Manukau East") {
+                        electorate = "Takanini"
+                    } else if (electorate == "Rimutaka") {
+                        electorate = "Remutaka"
+                    }
+                } else if (person["Local Election Run"]) {
+                    electorate = person["Local Election Run"]
+                    electorate = electorate.replace("Auckland City Council Local Board member;", "")
+                        .replace("board", "Board")
+                    var match = electorate.match(/([^\d]+?(?:Board|District Health Board|Ward))/)
+                    if (match) {
+                        electorate = match[1]
+                            .replace("Auckland", "")
+                            .replace("Christchurch", "")
+                            .replace("Wellington", "")
+                            .replace("City", "")
+                            .replace("Council", "")
+                            .replace("Local Franklin", "Franklin")
+                            .replace("Kaikpātiki", "Kaipātiki")
+                            .replace("Local Board", "Local Board Area")
+                            .replace("Waitemata", "Waitematā")
+                            .replace("-Waimairi", "")
+                            .replace("Community Board", "Ward")
+                            .replace("The", "")
+                            .replace("Pukekohe subdivision of", "")
+                            .replace("Pakuranga subdivision of", "")
+                            .replace("Paekawakawa-Southern Ward", "Paekawakawa/Southern Ward")
+                            .trim()
+                    }
+                } else {
+                    continue
                 }
                 if (layerLookup[electorate]) {
                     var point = randomPointInPoly(layerLookup[electorate]);
@@ -221,7 +292,7 @@
                         color = PARTY_COLORS[person.Affiliation]
                     }
                     L.circleMarker(point, { color: color }).bindTooltip(person.Name).bindPopup(desc).addTo(map)
-                } else {
+                } else if (electorate && electorate != "-") {
                     console.warn(`${electorate} not found`)
                 }
             }
