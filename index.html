@@ -219,6 +219,9 @@
                         person[key.trim()] = linkifyHtml(value.trim())
                     }
                 }
+                if (person.Affiliation == "Labour Party") {
+                    person.Affiliation = "Labour"
+                }
                 if (person.Name) {
                     people[person.Name] = person
                 }
@@ -276,6 +279,7 @@
                 } else {
                     continue
                 }
+                person.interpreted_electorate = electorate
                 if (layerLookup[electorate]) {
                     var point = randomPointInPoly(layerLookup[electorate]);
                     var desc = "";
