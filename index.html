@@ -208,15 +208,26 @@
             map.spin(false);
             // Read cached data
             var rows = JSON.parse(localStorage["sheet"]);
-            var headers = rows[3]
+            console.log(rows)
+            var headers = rows[0]
+            console.log(new Set(headers))
+            var additional_headers = rows[2]
             var people = {}
-            for (var i = 5; i < rows.length; i++) {
+            for (var i = 3; i < rows.length; i++) {
                 var person = {}
                 for (var j in headers) {
                     var key = headers[j]
                     var value = rows[i][j]
                     if (key && value) {
                         person[key.trim()] = linkifyHtml(value.trim())
+                    }
+                }
+                person.areas = new Set()
+                for (var j in additional_headers) {
+                    var key = additional_headers[j]
+                    var value = rows[i][j]
+                    if (value && !["N/A", "-"].includes(value) && ["Area", "Areas", "Electorate"].includes(key)) {
+                        person.areas.add(value)
                     }
                 }
                 if (person.Affiliation == "Labour Party") {
@@ -227,67 +238,18 @@
                 }
             }
             console.log(people)
+            window.people = people
             console.log(layerLookup)
             for (var person of Object.values(people)) {
-                var electorate = person["Contesting Electorate"]
-                if (electorate) {
-                    var match = electorate.match(/: ([^;,]+)[;,]/)
-                    if (match) {
-                        electorate = match[1]
-                    }
-                    if (electorate == "Wellington") {
-                        electorate = "Wellington Central"
-                    } else if (electorate == "Christchurch") {
-                        electorate = "Christchurch Central"
-                    } else if (electorate == "Hunua" || electorate == "Clevedon") {
-                        electorate = "Papakura"
-                    } else if (electorate == "Mount Roskill") {
-                        electorate = "Mt Roskill"
-                    } else if (electorate == "Mount Albert") {
-                        electorate = "Mt Albert"
-                    } else if (electorate == "Mangere") {
-                        electorate = "Māngere"
-                    } else if (electorate == "Manukau East") {
-                        electorate = "Takanini"
-                    } else if (electorate == "Rimutaka") {
-                        electorate = "Remutaka"
-                    }
-                } else if (person["Local Election Run"]) {
-                    electorate = person["Local Election Run"]
-                    electorate = electorate.replace("Auckland City Council Local Board member;", "")
-                        .replace("board", "Board")
-                    var match = electorate.match(/([^\d]+?(?:Board|District Health Board|Ward))/)
-                    if (match) {
-                        electorate = match[1]
-                            .replace("Auckland", "")
-                            .replace("Christchurch", "")
-                            .replace("Wellington", "")
-                            .replace("City", "")
-                            .replace("Council", "")
-                            .replace("Local Franklin", "Franklin")
-                            .replace("Kaikpātiki", "Kaipātiki")
-                            .replace("Local Board", "Local Board Area")
-                            .replace("Waitemata", "Waitematā")
-                            .replace("-Waimairi", "")
-                            .replace("Community Board", "Ward")
-                            .replace("The", "")
-                            .replace("Pukekohe subdivision of", "")
-                            .replace("Pakuranga subdivision of", "")
-                            .replace("Paekawakawa-Southern Ward", "Paekawakawa/Southern Ward")
-                            .trim()
-                    }
-                } else {
-                    continue
-                }
-                person.interpreted_electorate = electorate
+                if (!person.areas) continue;
+                [electorate] = person.areas
                 if (layerLookup[electorate]) {
                     var point = randomPointInPoly(layerLookup[electorate]);
                     var desc = "";
-                    var keys = ["Name", "Type of Election", "Affiliation", "Ethnicity", "Local Election Run", "Incumbency", "Contesting Electorate", "Party Committee member of", "Party Spokesperson for", "Chair", "Profession ", "Organisational affiliation", "Additional Information"]
-                    for (var k of keys) {
+                    for (var k in person) {
                         if (k == "Name") {
                             desc += `<b>${person[k]}</b><br>`
-                        } else if (person[k]) {
+                        } else if (!["TOTAL EW COUNT", "Portrait", "areas"].includes(k) && person[k]) {
                             desc += `${k}: ${person[k]}<br>`
                         }
                     }
@@ -296,7 +258,7 @@
                         color = PARTY_COLORS[person.Affiliation]
                     }
                     L.circleMarker(point, { color: color }).bindTooltip(person.Name).bindPopup(desc).addTo(map)
-                } else if (electorate && electorate != "-") {
+                } else {
                     console.warn(`${electorate} not found`)
                 }
             }
